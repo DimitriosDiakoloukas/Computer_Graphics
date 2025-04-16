@@ -1,0 +1,10 @@
+cgenv/
+Project*/__pycache__/
+*.aux
+*.log
+*.toc
+*.out
+*.fdb_latexmk
+*.fls
+_minted-*
+
