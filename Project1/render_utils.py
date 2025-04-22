@@ -17,7 +17,7 @@ def load_png_image(filepath):
     return img_rgb
 
 
-def render_img(faces, vertices, vcolors, depth, shading, uv=None, textImg=None):
+def render_img(faces, vertices, vcolors, uvs, depth, shading, textImg=None):
     """
     Renders a 3D object's projected triangles into a 2D image using flat or texture shading.
 
@@ -54,9 +54,9 @@ def render_img(faces, vertices, vcolors, depth, shading, uv=None, textImg=None):
             img = f_shading(img, triangle_vertices, triangle_colors)
 
         elif shading == "t":
-            if uv is None or textImg is None:
+            if uvs is None or textImg is None:
                 raise ValueError("Texture shading requires both uv and textImg.")
-            triangle_uv = uv[face, :]
+            triangle_uv = uvs[face, :]
             img = t_shading(img, triangle_vertices, triangle_uv, textImg)
 
         else:

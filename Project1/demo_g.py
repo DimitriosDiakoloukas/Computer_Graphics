@@ -9,7 +9,7 @@ def main():
     vcolors = data["v_clr"]
     faces = np.array(data["t_pos_idx"])
     depth = data["depth"].reshape(-1, 1)
-    uv = data["v_uvs"]
+    uvs = data["v_uvs"]
 
     texture = load_png_image("texImg.jpg")
 
@@ -18,7 +18,7 @@ def main():
     # vertices = vertices / np.max(vertices, axis=0)
     # vertices = vertices * 511
 
-    img = render_img(faces, vertices, vcolors, depth, shading="t", uv=uv, textImg=texture)
+    img = render_img(faces, vertices, vcolors, uvs, depth, shading="t", textImg=texture)
     print("Image shape:", img.shape)      # (height, width, 3)
     print("Image dtype:", img.dtype)      # float32 (usually before saving)
     print("Image min/max values:", img.min(), img.max())  # to check if normalized

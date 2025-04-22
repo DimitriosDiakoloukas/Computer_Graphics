@@ -9,6 +9,7 @@ def main():
     vcolors = data["v_clr"]
     faces = np.array(data["t_pos_idx"])
     depth = data["depth"].reshape(-1, 1)
+    uvs = data["v_uvs"]
 
     # FIX: Normalize and scale vertices to fit 512x512 image if you want perfect fit to canvas
     # Normalize to range [0, 1]
@@ -18,7 +19,7 @@ def main():
     # # Scale to canvas size
     # vertices = vertices * 511  # 0 to 511
 
-    img = render_img(faces, vertices, vcolors, depth, shading="f")
+    img = render_img(faces, vertices, vcolors, uvs, depth, shading="f", textImg=None)
 
     img_out = (img * 255).astype(np.uint8)
     cv2.imwrite("flat_result.png", img_out)
