@@ -21,8 +21,8 @@ def main():
 
     img = render_img(faces, vertices, vcolors, uvs, depth, shading="f", texImg=None)
 
-    img_out = (img * 255).astype(np.uint8)
-    cv2.imwrite("flat_result.png", img_out)
+    img_bgr = (img[:, :, ::-1] * 255).astype(np.uint8)
+    cv2.imwrite('flat_result.png', img_bgr)
 
 if __name__ == "__main__":
     main()

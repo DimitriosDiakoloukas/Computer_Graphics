@@ -23,13 +23,13 @@ def main():
     print("Image dtype:", img.dtype)      # float32 (usually before saving)
     print("Image min/max values:", img.min(), img.max())  # to check if normalized
 
-    img_out = (img * 255).astype(np.uint8)
+    img_bgr = (img[:, :, ::-1] * 255).astype(np.uint8)
     print("Final image info:")
-    print("Shape:", img_out.shape)
-    print("Dtype:", img_out.dtype)
-    print("Min/Max:", img_out.min(), img_out.max())
+    print("Shape:", img_bgr.shape)
+    print("Dtype:", img_bgr.dtype)
+    print("Min/Max:", img_bgr.min(), img_bgr.max())
 
-    cv2.imwrite("texture_result.png", img_out)
+    cv2.imwrite("texture_result.png", img_bgr)
 
 if __name__ == "__main__":
     main()
