@@ -17,7 +17,7 @@ def load_png_image(filepath):
     return img_rgb
 
 
-def render_img(faces, vertices, vcolors, uvs, depth, shading, textImg=None):
+def render_img(faces, vertices, vcolors, uvs, depth, shading, texImg=None):
     """
     Renders a 3D object's projected triangles into a 2D image using flat or texture shading.
 
@@ -28,7 +28,7 @@ def render_img(faces, vertices, vcolors, uvs, depth, shading, textImg=None):
         depth (Lx1 ndarray or L,) : Depth value per vertex
         shading (str): "f" (flat) or "t" (texture)
         uv (Lx2 ndarray): UV coordinates per vertex (for texture shading)
-        textImg (HxWx3 ndarray): Texture image in RGB format, values in [0, 1]
+        texImg (HxWx3 ndarray): Texture image in RGB format, values in [0, 1]
 
     Returns:
         img (MxNx3 ndarray): Final rendered image
@@ -54,10 +54,10 @@ def render_img(faces, vertices, vcolors, uvs, depth, shading, textImg=None):
             img = f_shading(img, triangle_vertices, triangle_colors)
 
         elif shading == "t":
-            if uvs is None or textImg is None:
-                raise ValueError("Texture shading requires both uv and textImg.")
+            if uvs is None or texImg is None:
+                raise ValueError("Texture shading requires both uv and texImg.")
             triangle_uv = uvs[face, :]
-            img = t_shading(img, triangle_vertices, triangle_uv, textImg)
+            img = t_shading(img, triangle_vertices, triangle_uv, texImg)
 
         else:
             raise ValueError("Invalid shading mode. Use 'f' or 't'.")

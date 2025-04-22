@@ -18,7 +18,7 @@ def main():
     # vertices = vertices / np.max(vertices, axis=0)
     # vertices = vertices * 511
 
-    img = render_img(faces, vertices, vcolors, uvs, depth, shading="t", textImg=texture)
+    img = render_img(faces, vertices, vcolors, uvs, depth, shading="t", texImg=texture)
     print("Image shape:", img.shape)      # (height, width, 3)
     print("Image dtype:", img.dtype)      # float32 (usually before saving)
     print("Image min/max values:", img.min(), img.max())  # to check if normalized

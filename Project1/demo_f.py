@@ -19,7 +19,7 @@ def main():
     # # Scale to canvas size
     # vertices = vertices * 511  # 0 to 511
 
-    img = render_img(faces, vertices, vcolors, uvs, depth, shading="f", textImg=None)
+    img = render_img(faces, vertices, vcolors, uvs, depth, shading="f", texImg=None)
 
     img_out = (img * 255).astype(np.uint8)
     cv2.imwrite("flat_result.png", img_out)
