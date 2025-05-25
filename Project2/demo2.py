@@ -7,12 +7,26 @@ from all_funcs import render_object
 
 
 def load_data():
+    """
+    Load the scene data and texture image from files.
+    Returns:
+        data (dict): Dictionary containing scene data including vertex positions, UVs, and camera parameters.
+        texture (np.ndarray): Texture image for the object.
+    """
     data = np.load("hw2.npy", allow_pickle=True).item()
     texture = np.asarray(Image.open("stone-72_diffuse.jpg")) / 255.0
     return data, texture
 
 
 def render_target_tracking_demo(data, texture, output_dir="demo_2", video_name="demo_2_video.mp4"):
+    """
+    Render a target tracking demo of a car moving along a circular path with a camera tracking it.
+    Args:
+        data (dict): Dictionary containing scene data including vertex positions, UVs, and camera parameters.
+        texture (np.ndarray): Texture image for the object.
+        output_dir (str): Directory to save the rendered frames.
+        video_name (str): Name of the output video file.
+    """
     os.makedirs(output_dir, exist_ok=True)
 
     # Unpack scene data
@@ -72,6 +86,13 @@ def render_target_tracking_demo(data, texture, output_dir="demo_2", video_name="
 
 
 def save_video(folder, output_name, fps):
+    """
+    Save the rendered frames as a video file.
+    Args:
+        folder (str): Directory containing the rendered frames.
+        output_name (str): Name of the output video file.
+        fps (int): Frames per second for the video.
+    """
     frames = []
     for i in range(fps * 5):  # 5 seconds at 25fps = 125 frames
         filename = os.path.join(folder, f"frame_{i:03d}.png")
