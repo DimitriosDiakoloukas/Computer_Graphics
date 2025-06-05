@@ -4,264 +4,206 @@ from all_funcs_prev import perspective_project, lookat, rasterize
 from vector_interp import vector_interp
 from MatPhong import light
 
+DBG = True
+
 def calc_normals(pts: np.ndarray, t_pos_idx: np.ndarray) -> np.ndarray:
-    """
-    Computes the unit normal vector for each vertex of the mesh,
-    oriented outward using the right-hand rule.
-
-    Parameters
-    ----------
-    pts : (3, N_v) ndarray
-        Coordinates of all vertices.
-    t_pos_idx : (3, N_T) ndarray (int)
-        Vertex indices for each triangle (as columns).
-        Can be 0-based (Python style) or 1-based (as in theory).
-
-    Returns
-    -------
-    nrm : (3, N_v) ndarray
-        Unit normal vectors for each vertex.
-    """
-
-    # --- Initialize normal vector array (we will accumulate per vertex)
-    nrm = np.zeros_like(pts)           # 3 × N_v
-
-    # --- Convert indices to 0-based if they are 1-based
+    nrm = np.zeros_like(pts)
     if t_pos_idx.min() == 1:
         tri_idx = t_pos_idx.astype(int) - 1
     else:
         tri_idx = t_pos_idx.astype(int)
 
-    # --- Loop over each triangle: accumulate face normal to each vertex
     for k in range(tri_idx.shape[1]):
-        i0, i1, i2 = tri_idx[:, k]     # indices of the triangle's three vertices
-
-        # Coordinates of the triangle's vertices
-        v0, v1, v2 = pts[:, i0], pts[:, i1], pts[:, i2]
-
-        # Edges (v1-v0, v2-v0) and triangle normal (right-hand rule)
-        e1 = v1 - v0
-        e2 = v2 - v0
-        face_n = np.cross(e1, e2)      # unnormalized face normal
-
-        # Add the face normal to the three vertices
+        i0, i1, i2 = tri_idx[:, k]
+        v0 = pts[:, i0]
+        v1 = pts[:, i1]
+        v2 = pts[:, i2]
+        face_n = np.cross(v1 - v0, v2 - v0)
         nrm[:, i0] += face_n
         nrm[:, i1] += face_n
         nrm[:, i2] += face_n
 
-    # --- Normalize per-vertex normals
     lengths = np.linalg.norm(nrm, axis=0)
-    non_zero = lengths > 0
-    nrm[:, non_zero] /= lengths[non_zero]
+    nonzero = (lengths > 1e-8)
+    nrm[:, nonzero] /= lengths[nonzero]
+
+    if DBG:
+        print(f"[calc_normals]  produced normals of shape {nrm.shape}")
 
     return nrm
 
+def shade_gouraud(v_pos, v_nrm, v_uvs, tex, cam_pos, mat, l_pos, l_int, l_amb, img):
+    if DBG:
+        print("  [Gouraud] rasterising one triangle")
 
-def shade_gouraud(
-    v_proj: np.ndarray,      # (2, 3) screen-space coords
-    v_world: np.ndarray,     # (3, 3) world-space coords for lighting
-    v_nrm: np.ndarray,
-    v_uvs: np.ndarray,
-    tex: np.ndarray,
-    cam_pos: np.ndarray,
-    mat,
-    l_pos, l_int, l_amb,
-    img: np.ndarray
-) -> np.ndarray:
-    updated_img = np.copy(img)
-
-    vertex_colors = []
-    for i in range(3):
-        pt = v_world[:, i]
-        nrm = v_nrm[:, i]
-        uv = v_uvs[:, i]
-        tex_color = tex[int((1 - uv[1]) * (tex.shape[0] - 1)), int(uv[0] * (tex.shape[1] - 1))]
-        col = light(pt, nrm, tex_color, cam_pos, mat, l_pos, l_int, l_amb)
-        vertex_colors.append(col)
-    vertex_colors = np.array(vertex_colors)
-
-    screen_coords = np.vstack([v_proj, np.zeros(3)])  # add dummy depth
-    indices = np.argsort(screen_coords[1])
-    v = screen_coords[:, indices].T
-    c = vertex_colors[indices]
-    uv = v_uvs[:, indices].T
-
-    min_y = max(int(np.ceil(v[0][1])), 0)
-    max_y = min(int(np.floor(v[2][1])), img.shape[0] - 1)
-
-    for y in range(min_y, max_y + 1):
-        if y < v[1][1]:
-            a = vector_interp(v[0], v[1], v[0], v[1], y, dim=2)
-            b = vector_interp(v[0], v[2], v[0], v[2], y, dim=2)
-            ca = vector_interp(v[0], v[1], c[0], c[1], y, dim=2)
-            cb = vector_interp(v[0], v[2], c[0], c[2], y, dim=2)
-        else:
-            a = vector_interp(v[1], v[2], v[1], v[2], y, dim=2)
-            b = vector_interp(v[0], v[2], v[0], v[2], y, dim=2)
-            ca = vector_interp(v[1], v[2], c[1], c[2], y, dim=2)
-            cb = vector_interp(v[0], v[2], c[0], c[2], y, dim=2)
-
-        a = np.array(a)
-        b = np.array(b)
-        ca = np.array(ca)
-        cb = np.array(cb)
-
-        if a[0] > b[0]:
-            a, b = b, a
-            ca, cb = cb, ca
-
-        min_x = max(int(np.ceil(a[0])), 0)
-        max_x = min(int(np.floor(b[0])), img.shape[1] - 1)
-
-        for x in range(min_x, max_x + 1):
-            c_p = vector_interp(a, b, ca, cb, x, dim=1)
-            updated_img[y, x] = np.clip(c_p, 0, 1)
-
-    return updated_img
-
-
-def shade_phong(
-    v_proj: np.ndarray,      # (2, 3) screen coords
-    v_world: np.ndarray,     # (3, 3) 3D positions
-    v_nrm: np.ndarray,       # (3, 3)
-    v_uvs: np.ndarray,       # (2, 3)
-    tex: np.ndarray,
-    cam_pos: np.ndarray,
-    mat,
-    l_pos, l_int, l_amb,
-    img: np.ndarray
-) -> np.ndarray:
-    updated_img = np.copy(img)
     H, W, _ = tex.shape
+    out = img
+    vcol = np.zeros((3, 3), dtype=np.float32)
+    for i in range(3):
+        P_cam = np.array([v_pos[0, i], v_pos[1, i], v_pos[2, i]])
+        N_i = v_nrm[:, i]
+        uv_i = v_uvs[:, i]
+        texel = tex[int((1 - uv_i[1]) * (H - 1)), int(uv_i[0] * (W - 1))]
+        vcol[i] = light(P_cam, N_i, texel, cam_pos, mat, l_pos, l_int, l_amb)
+        if DBG:
+            print(f"    vertex {i}: uv={uv_i}, texel={texel[:3]}, lit‐color={vcol[i]}")
 
-    screen_coords = np.vstack([v_proj, np.zeros(3)])
-    norms = v_nrm.T
-    uvs = v_uvs.T
-    world = v_world.T
+    scr = v_pos[0:2, :]
+    order = np.argsort(scr[1, :])
+    scr_sorted = scr[:, order].T
+    col_sorted = vcol[order]
+    uv_sorted = v_uvs[:, order].T
 
-    inds = np.argsort(screen_coords[1])
-    v = screen_coords[:, inds].T
-    n = norms[inds]
-    uv = uvs[inds]
-    wp = world[inds]
+    y0 = int(np.ceil(scr_sorted[0, 1]))
+    y2 = int(np.floor(scr_sorted[2, 1]))
+    y0 = max(0, y0)
+    y2 = min(out.shape[0] - 1, y2)
 
-    min_y = max(int(np.ceil(v[0][1])), 0)
-    max_y = min(int(np.floor(v[2][1])), img.shape[0] - 1)
-
-    for y in range(min_y, max_y + 1):
-        if y < v[1][1]:
-            a = vector_interp(v[0], v[1], v[0], v[1], y, dim=2)
-            b = vector_interp(v[0], v[2], v[0], v[2], y, dim=2)
-            na = vector_interp(v[0], v[1], n[0], n[1], y, dim=2)
-            nb = vector_interp(v[0], v[2], n[0], n[2], y, dim=2)
-            uva = vector_interp(v[0], v[1], uv[0], uv[1], y, dim=2)
-            uvb = vector_interp(v[0], v[2], uv[0], uv[2], y, dim=2)
-            wpa = vector_interp(v[0], v[1], wp[0], wp[1], y, dim=2)
-            wpb = vector_interp(v[0], v[2], wp[0], wp[2], y, dim=2)
+    for yy in range(y0, y2 + 1):
+        if yy < scr_sorted[1, 1]:
+            A = vector_interp(scr_sorted[0], scr_sorted[1], scr_sorted[0], scr_sorted[1], yy, dim=2)
+            B = vector_interp(scr_sorted[0], scr_sorted[2], scr_sorted[0], scr_sorted[2], yy, dim=2)
+            CA = vector_interp(scr_sorted[0], scr_sorted[1], col_sorted[0], col_sorted[1], yy, dim=2)
+            CB = vector_interp(scr_sorted[0], scr_sorted[2], col_sorted[0], col_sorted[2], yy, dim=2)
         else:
-            a = vector_interp(v[1], v[2], v[1], v[2], y, dim=2)
-            b = vector_interp(v[0], v[2], v[0], v[2], y, dim=2)
-            na = vector_interp(v[1], v[2], n[1], n[2], y, dim=2)
-            nb = vector_interp(v[0], v[2], n[0], n[2], y, dim=2)
-            uva = vector_interp(v[1], v[2], uv[1], uv[2], y, dim=2)
-            uvb = vector_interp(v[0], v[2], uv[0], uv[2], y, dim=2)
-            wpa = vector_interp(v[1], v[2], wp[1], wp[2], y, dim=2)
-            wpb = vector_interp(v[0], v[2], wp[0], wp[2], y, dim=2)
+            A = vector_interp(scr_sorted[1], scr_sorted[2], scr_sorted[1], scr_sorted[2], yy, dim=2)
+            B = vector_interp(scr_sorted[0], scr_sorted[2], scr_sorted[0], scr_sorted[2], yy, dim=2)
+            CA = vector_interp(scr_sorted[1], scr_sorted[2], col_sorted[1], col_sorted[2], yy, dim=2)
+            CB = vector_interp(scr_sorted[0], scr_sorted[2], col_sorted[0], col_sorted[2], yy, dim=2)
 
-        a = np.array(a)
-        b = np.array(b)
-        na = np.array(na)
-        nb = np.array(nb)
-        uva = np.array(uva)
-        uvb = np.array(uvb)
-        wpa = np.array(wpa)
-        wpb = np.array(wpb)
+        A, B, CA, CB = np.array(A), np.array(B), np.array(CA), np.array(CB)
+        if A[0] > B[0]:
+            A, B = B, A
+            CA, CB = CB, CA
 
-        if a[0] > b[0]:
-            a, b = b, a
-            na, nb = nb, na
-            uva, uvb = uvb, uva
-            wpa, wpb = wpb, wpa
+        x0 = int(np.ceil(A[0]))
+        x2 = int(np.floor(B[0]))
+        x0 = max(0, x0)
+        x2 = min(out.shape[1] - 1, x2)
 
-        min_x = max(int(np.ceil(a[0])), 0)
-        max_x = min(int(np.floor(b[0])), img.shape[1] - 1)
+        for xx in range(x0, x2 + 1):
+            C_pix = vector_interp(A, B, CA, CB, xx, dim=1)
+            out[yy, xx] = np.clip(C_pix, 0, 1)
 
-        for x in range(min_x, max_x + 1):
-            p_nrm = vector_interp(a, b, na, nb, x, dim=1)
-            p_uv = vector_interp(a, b, uva, uvb, x, dim=1)
-            p_wpos = vector_interp(a, b, wpa, wpb, x, dim=1)
+    return out
 
-            p_nrm = np.array(p_nrm)
-            p_uv = np.array(p_uv)
-            p_wpos = np.array(p_wpos)
+def shade_phong(v_pos, v_nrm, v_uvs, tex, cam_pos, mat, l_pos, l_int, l_amb, img):
+    if DBG:
+        print("  [Phong]     rasterising one triangle")
 
-            u = int(p_uv[0] * (W - 1))
-            v_t = int((1 - p_uv[1]) * (H - 1))
-            u = np.clip(u, 0, W - 1)
-            v_t = np.clip(v_t, 0, H - 1)
-            tex_color = tex[v_t, u]
+    out = img
+    H, W, _ = tex.shape
+    scr = v_pos[0:2, :]
+    order = np.argsort(scr[1, :])
+    scr_sorted = scr[:, order].T
+    n_sorted = v_nrm[:, order].T
+    uv_sorted = v_uvs[:, order].T
+    Pcam_sorted = np.vstack([v_pos[0, order], v_pos[1, order], v_pos[2, order]]).T
 
-            color = light(p_wpos, p_nrm, tex_color, cam_pos, mat, l_pos, l_int, l_amb)
-            updated_img[y, x] = color
+    y0 = int(np.ceil(scr_sorted[0, 1]))
+    y2 = int(np.floor(scr_sorted[2, 1]))
+    y0 = max(0, y0)
+    y2 = min(out.shape[0] - 1, y2)
 
-    return updated_img
+    for yy in range(y0, y2 + 1):
+        if yy < scr_sorted[1, 1]:
+            A = vector_interp(scr_sorted[0], scr_sorted[1], scr_sorted[0], scr_sorted[1], yy, dim=2)
+            B = vector_interp(scr_sorted[0], scr_sorted[2], scr_sorted[0], scr_sorted[2], yy, dim=2)
+            NA = vector_interp(scr_sorted[0], scr_sorted[1], n_sorted[0], n_sorted[1], yy, dim=2)
+            NB = vector_interp(scr_sorted[0], scr_sorted[2], n_sorted[0], n_sorted[2], yy, dim=2)
+            UVA = vector_interp(scr_sorted[0], scr_sorted[1], uv_sorted[0], uv_sorted[1], yy, dim=2)
+            UVB = vector_interp(scr_sorted[0], scr_sorted[2], uv_sorted[0], uv_sorted[2], yy, dim=2)
+            PA = vector_interp(scr_sorted[0], scr_sorted[1], Pcam_sorted[0], Pcam_sorted[1], yy, dim=2)
+            PB = vector_interp(scr_sorted[0], scr_sorted[2], Pcam_sorted[0], Pcam_sorted[2], yy, dim=2)
+        else:
+            A = vector_interp(scr_sorted[1], scr_sorted[2], scr_sorted[1], scr_sorted[2], yy, dim=2)
+            B = vector_interp(scr_sorted[0], scr_sorted[2], scr_sorted[0], scr_sorted[2], yy, dim=2)
+            NA = vector_interp(scr_sorted[1], scr_sorted[2], n_sorted[1], n_sorted[2], yy, dim=2)
+            NB = vector_interp(scr_sorted[0], scr_sorted[2], n_sorted[0], n_sorted[2], yy, dim=2)
+            UVA = vector_interp(scr_sorted[1], scr_sorted[2], uv_sorted[1], uv_sorted[2], yy, dim=2)
+            UVB = vector_interp(scr_sorted[0], scr_sorted[2], uv_sorted[0], uv_sorted[2], yy, dim=2)
+            PA = vector_interp(scr_sorted[1], scr_sorted[2], Pcam_sorted[1], Pcam_sorted[2], yy, dim=2)
+            PB = vector_interp(scr_sorted[0], scr_sorted[2], Pcam_sorted[0], Pcam_sorted[2], yy, dim=2)
 
+        A, B = np.array(A), np.array(B)
+        NA_, NB_ = np.array(NA), np.array(NB)
+        UVA_, UVB_ = np.array(UVA), np.array(UVB)
+        PA_, PB_ = np.array(PA), np.array(PB)
 
-def render_object(
-    v_pos: np.ndarray,
-    v_uvs: np.ndarray,
-    t_pos_idx: np.ndarray,
-    tex: np.ndarray,
-    plane_h: int,
-    plane_w: int,
-    res_h: int,
-    res_w: int,
-    focal: float,
-    eye: np.ndarray,
-    target: np.ndarray,
-    up: np.ndarray,
-    mat,
-    l_pos: Union[np.ndarray, List[np.ndarray]],
-    l_int: Union[np.ndarray, List[np.ndarray]],
-    l_amb: np.ndarray,
-    shader: str
-) -> np.ndarray:
-    print("\n========== render_object DEBUG ==========")
+        if A[0] > B[0]:
+            A, B = B, A
+            NA_, NB_ = NB_, NA_
+            UVA_, UVB_ = UVB_, UVA_
+            PA_, PB_ = PB_, PA_
 
-    print("[Step 1] Computing normals...")
-    v_norm = calc_normals(v_pos, t_pos_idx)
-    print(f"Normals shape: {v_norm.shape}")
+        x0 = int(np.ceil(A[0]))
+        x2 = int(np.floor(B[0]))
+        x0 = max(0, x0)
+        x2 = min(out.shape[1] - 1, x2)
 
-    print("[Step 2] Projecting vertices...")
-    R, t = lookat(eye, up, target)
-    projected_2d, depths = perspective_project(v_pos, focal, R, t)
-    pixel_coords = rasterize(projected_2d, plane_w, plane_h, res_w, res_h)
-    print(f"Projected 2D shape: {projected_2d.shape}")
-    print(f"Rasterized coords min: {pixel_coords.min(axis=1)} max: {pixel_coords.max(axis=1)}")
+        for xx in range(x0, x2 + 1):
+            N_px = vector_interp(A, B, NA_, NB_, xx, dim=1)
+            UV_px = vector_interp(A, B, UVA_, UVB_, xx, dim=1)
+            P_px = vector_interp(A, B, PA_, PB_, xx, dim=1)
+            u_pix = int(UV_px[0] * (W - 1))
+            v_pix = int((1 - UV_px[1]) * (H - 1))
+            u_pix = np.clip(u_pix, 0, W - 1)
+            v_pix = np.clip(v_pix, 0, H - 1)
+            texel = tex[v_pix, u_pix]
+            out[yy, xx] = light(P_px, N_px, texel, cam_pos, mat, l_pos, l_int, l_amb)
+
+    return out
+
+def render_object(v_pos, v_uvs, t_pos_idx, tex, plane_h, plane_w, res_h, res_w,
+                  focal, eye, up, target, mat, l_pos, l_int, l_amb, shader):
+    if DBG:
+        print("\n========== render_object() ==========")
+
+    Wnorm = calc_normals(v_pos, t_pos_idx)
+    R, t_vec = lookat(eye, up, target)
+    v_nrm = R @ Wnorm
+
+    if DBG:
+        print("[Step 1] normals computed, shape =", v_nrm.shape)
+
+    v_cam = (R @ v_pos) + t_vec[:, None]
+    proj2d, depth = perspective_project(v_cam, focal, np.eye(3), np.zeros(3))
+    pix = rasterize(proj2d, plane_w, plane_h, res_w, res_h)
+
+    if DBG:
+        print("[Step 2] projection & rasterise:")
+        print("       proj2d shape =", proj2d.shape, "  depth shape =", depth.shape)
+        print("       pix range x:[%d..%d], y:[%d..%d]" %
+              (pix[0].min(), pix[0].max(), pix[1].min(), pix[1].max()))
 
     img = np.ones((res_h, res_w, 3), dtype=np.float32)
-
-    print(f"[Step 3] Shading {t_pos_idx.shape[1]} triangles using '{shader}' shader...")
+    tri_depth = np.zeros(t_pos_idx.shape[1], dtype=np.float32)
     for k in range(t_pos_idx.shape[1]):
-        indices = t_pos_idx[:, k]
+        idx = t_pos_idx[:, k].astype(int)
+        tri_depth[k] = np.mean(depth[idx])
+    order = np.argsort(tri_depth)[::-1]
 
-        tri_proj = pixel_coords[:, indices]    # (2, 3)
-        tri_world = v_pos[:, indices]          # (3, 3)
-        tri_norm = v_norm[:, indices]          # (3, 3)
-        tri_uvs = v_uvs[:, indices]            # (2, 3)
+    if DBG:
+        print("[Step 3] sorting triangles by depth, #tris =", len(order))
 
-        if shader == "phong":
-            img = shade_phong(
-                tri_proj, tri_world, tri_norm, tri_uvs, tex, eye,
-                mat, l_pos, l_int, l_amb, img
-            )
-        elif shader == "gouraud":
-            img = shade_gouraud(
-                tri_proj, tri_world, tri_norm, tri_uvs, tex, eye,
-                mat, l_pos, l_int, l_amb, img
-            )
+    for k in order:
+        idx = t_pos_idx[:, k].astype(int)
+        tri_pix2 = pix[:, idx]
+        tri_depths = depth[idx]
+        tri_proj3 = np.vstack([tri_pix2, tri_depths])
+        tri_uvs = v_uvs[:, idx]
+        tri_nrm_cam = v_nrm[:, idx]
+
+        if shader.lower() == "gouraud":
+            img = shade_gouraud(tri_proj3, tri_nrm_cam, tri_uvs, tex,
+                                eye, mat, l_pos, l_int, l_amb, img)
+        elif shader.lower() == "phong":
+            img = shade_phong(tri_proj3, tri_nrm_cam, tri_uvs, tex,
+                              eye, mat, l_pos, l_int, l_amb, img)
         else:
-            raise ValueError("shader must be 'phong' or 'gouraud'")
+            raise ValueError("render_object: shader must be 'gouraud' or 'phong'")
+
+    if DBG:
+        print("[Step 4] shading complete\n")
 
     return np.clip(img, 0, 1)
-
