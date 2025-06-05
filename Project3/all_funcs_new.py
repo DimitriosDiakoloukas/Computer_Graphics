@@ -239,7 +239,7 @@ def render_object(
     print(f"Projected 2D shape: {projected_2d.shape}")
     print(f"Rasterized coords min: {pixel_coords.min(axis=1)} max: {pixel_coords.max(axis=1)}")
 
-    img = np.zeros((res_h, res_w, 3), dtype=np.float32)
+    img = np.ones((res_h, res_w, 3), dtype=np.float32)
 
     print(f"[Step 3] Shading {t_pos_idx.shape[1]} triangles using '{shader}' shader...")
     for k in range(t_pos_idx.shape[1]):
