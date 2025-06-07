@@ -25,10 +25,14 @@ def main():
     focal = data['focal']
 
     ka_base = data['ka']
+    print(f"ka_base: {ka_base}")
     kd_base = data['kd']
+    print(f"kd_base: {kd_base}")
     ks_base = data['ks']
+    print(f"ks_base: {ks_base}")
     n_base = data['n']
-
+    print(f"n_base: {n_base}")
+    print(f"cam_pos: {cam_pos}, up: {up}, target: {target}")
     # Load texture
     texture_path = "Mona-Lisa-Exist-in-Real-Life-2635825581.jpg"
     if os.path.exists(texture_path):
