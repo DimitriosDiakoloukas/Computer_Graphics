@@ -7,6 +7,16 @@ from MatPhong import light
 DBG = True
 
 def calc_normals(pts: np.ndarray, t_pos_idx: np.ndarray) -> np.ndarray:
+    """
+    Calculate normals for a set of points based on triangle indices.
+    Args:
+        pts (np.ndarray): Points in shape (3, N) where N is the number of points.
+        t_pos_idx (np.ndarray): Triangle indices in shape (3, M) where M is the number of triangles.
+    Returns:
+        np.ndarray: Normals in shape (3, N) where N is the number of points.
+    Raises:
+        ValueError: If pts is not of shape (3, N) or t_pos_idx is not of shape (3, M).
+    """
     nrm = np.zeros_like(pts)
     if t_pos_idx.min() == 1:
         tri_idx = t_pos_idx.astype(int) - 1
@@ -33,6 +43,24 @@ def calc_normals(pts: np.ndarray, t_pos_idx: np.ndarray) -> np.ndarray:
     return nrm
 
 def shade_gouraud(v_pos, v_nrm, v_uvs, tex, cam_pos, mat, l_pos, l_int, l_amb, img):
+    """
+    Gouraud shading for a triangle defined by its vertices.
+    Args:
+        v_pos (np.ndarray): Vertex positions in shape (3, 3).
+        v_nrm (np.ndarray): Vertex normals in shape (3, 3).
+        v_uvs (np.ndarray): Vertex UV coordinates in shape (2, 3).
+        tex (np.ndarray): Texture image in shape (H, W, 3).
+        cam_pos (np.ndarray): Camera position in shape (3,).
+        mat (MatPhong): Material properties.    
+        l_pos (List[np.ndarray]): Light positions in shape (3, N).
+        l_int (List[np.ndarray]): Light intensities in shape (3, N).
+        l_amb (np.ndarray): Ambient light intensity in shape (3,).
+        img (np.ndarray): Image to draw on in shape (H, W, 3).
+    Returns:
+        np.ndarray: Image with the triangle shaded.
+    Raises:
+        ValueError: If v_pos, v_nrm, or v_uvs are not of shape (3, 3) or (2, 3).
+    """
     if DBG:
         print("  [Gouraud] rasterising one triangle")
 
@@ -59,13 +87,16 @@ def shade_gouraud(v_pos, v_nrm, v_uvs, tex, cam_pos, mat, l_pos, l_int, l_amb, i
     y0 = max(0, y0)
     y2 = min(out.shape[0] - 1, y2)
 
+    # Loop through each scanline
     for yy in range(y0, y2 + 1):
         if yy < scr_sorted[1, 1]:
+            # Interpolate between the first two vertices
             A = vector_interp(scr_sorted[0], scr_sorted[1], scr_sorted[0], scr_sorted[1], yy, dim=2)
             B = vector_interp(scr_sorted[0], scr_sorted[2], scr_sorted[0], scr_sorted[2], yy, dim=2)
             CA = vector_interp(scr_sorted[0], scr_sorted[1], col_sorted[0], col_sorted[1], yy, dim=2)
             CB = vector_interp(scr_sorted[0], scr_sorted[2], col_sorted[0], col_sorted[2], yy, dim=2)
         else:
+            # If the scanline is below the middle vertex
             A = vector_interp(scr_sorted[1], scr_sorted[2], scr_sorted[1], scr_sorted[2], yy, dim=2)
             B = vector_interp(scr_sorted[0], scr_sorted[2], scr_sorted[0], scr_sorted[2], yy, dim=2)
             CA = vector_interp(scr_sorted[1], scr_sorted[2], col_sorted[1], col_sorted[2], yy, dim=2)
@@ -88,6 +119,24 @@ def shade_gouraud(v_pos, v_nrm, v_uvs, tex, cam_pos, mat, l_pos, l_int, l_amb, i
     return out
 
 def shade_phong(v_pos, v_nrm, v_uvs, tex, cam_pos, mat, l_pos, l_int, l_amb, img):
+    """
+    Phong shading for a triangle defined by its vertices.
+    Args:
+        v_pos (np.ndarray): Vertex positions in shape (3, 3).
+        v_nrm (np.ndarray): Vertex normals in shape (3, 3).
+        v_uvs (np.ndarray): Vertex UV coordinates in shape (2, 3).
+        tex (np.ndarray): Texture image in shape (H, W, 3).
+        cam_pos (np.ndarray): Camera position in shape (3,).
+        mat (MatPhong): Material properties.
+        l_pos (List[np.ndarray]): Light positions in shape (3, N).
+        l_int (List[np.ndarray]): Light intensities in shape (3, N).
+        l_amb (np.ndarray): Ambient light intensity in shape (3,).
+        img (np.ndarray): Image to draw on in shape (H, W, 3).
+    Returns:    
+        np.ndarray: Image with the triangle shaded.
+    Raises:
+        ValueError: If v_pos, v_nrm, or v_uvs are not of shape (3, 3) or (2, 3).
+    """
     if DBG:
         print("  [Phong]     rasterising one triangle")
 
@@ -107,6 +156,7 @@ def shade_phong(v_pos, v_nrm, v_uvs, tex, cam_pos, mat, l_pos, l_int, l_amb, img
 
     for yy in range(y0, y2 + 1):
         if yy < scr_sorted[1, 1]:
+            # Interpolate between the first two vertices
             A = vector_interp(scr_sorted[0], scr_sorted[1], scr_sorted[0], scr_sorted[1], yy, dim=2)
             B = vector_interp(scr_sorted[0], scr_sorted[2], scr_sorted[0], scr_sorted[2], yy, dim=2)
             NA = vector_interp(scr_sorted[0], scr_sorted[1], n_sorted[0], n_sorted[1], yy, dim=2)
@@ -116,6 +166,7 @@ def shade_phong(v_pos, v_nrm, v_uvs, tex, cam_pos, mat, l_pos, l_int, l_amb, img
             PA = vector_interp(scr_sorted[0], scr_sorted[1], Pcam_sorted[0], Pcam_sorted[1], yy, dim=2)
             PB = vector_interp(scr_sorted[0], scr_sorted[2], Pcam_sorted[0], Pcam_sorted[2], yy, dim=2)
         else:
+            # If the scanline is below the middle vertex
             A = vector_interp(scr_sorted[1], scr_sorted[2], scr_sorted[1], scr_sorted[2], yy, dim=2)
             B = vector_interp(scr_sorted[0], scr_sorted[2], scr_sorted[0], scr_sorted[2], yy, dim=2)
             NA = vector_interp(scr_sorted[1], scr_sorted[2], n_sorted[1], n_sorted[2], yy, dim=2)
@@ -130,6 +181,10 @@ def shade_phong(v_pos, v_nrm, v_uvs, tex, cam_pos, mat, l_pos, l_int, l_amb, img
         UVA_, UVB_ = np.array(UVA), np.array(UVB)
         PA_, PB_ = np.array(PA), np.array(PB)
 
+        # Ensure A is always the left vertex
+        # This ensures that we always interpolate from left to right
+        # If A is to the right of B, swap them
+        # and also swap the normals, UVs, and positions
         if A[0] > B[0]:
             A, B = B, A
             NA_, NB_ = NB_, NA_
@@ -142,6 +197,8 @@ def shade_phong(v_pos, v_nrm, v_uvs, tex, cam_pos, mat, l_pos, l_int, l_amb, img
         x2 = min(out.shape[1] - 1, x2)
 
         for xx in range(x0, x2 + 1):
+            # Interpolate the position, normal, UVs, and color
+            # for the current pixel (xx, yy)    
             N_px = vector_interp(A, B, NA_, NB_, xx, dim=1)
             UV_px = vector_interp(A, B, UVA_, UVB_, xx, dim=1)
             P_px = vector_interp(A, B, PA_, PB_, xx, dim=1)
@@ -154,11 +211,38 @@ def shade_phong(v_pos, v_nrm, v_uvs, tex, cam_pos, mat, l_pos, l_int, l_amb, img
 
     return out
 
+
 def render_object(v_pos, v_uvs, t_pos_idx, tex, plane_h, plane_w, res_h, res_w,
                   focal, eye, up, target, mat, l_pos, l_int, l_amb, shader):
+    """
+    Render a 3D object defined by vertex positions, UVs, and triangle indices.  
+    Args:
+        v_pos (np.ndarray): Vertex positions in shape (3, N).
+        v_uvs (np.ndarray): Vertex UV coordinates in shape (2, N).
+        t_pos_idx (np.ndarray): Triangle indices in shape (3, M).
+        tex (np.ndarray): Texture image in shape (H, W, 3).
+        plane_h (float): Height of the rendering plane.
+        plane_w (float): Width of the rendering plane.
+        res_h (int): Height of the output image.
+        res_w (int): Width of the output image.
+        focal (float): Focal length for perspective projection.
+        eye (np.ndarray): Camera position in shape (3,).
+        up (np.ndarray): Up vector for the camera in shape (3,).
+        target (np.ndarray): Target point for the camera in shape (3,).
+        mat: Material properties for shading.
+        l_pos: List of light positions in shape (3, N).
+        l_int: List of light intensities in shape (3, N).
+        l_amb: Ambient light intensity in shape (3,).
+        shader: Shading method to use ('gouraud' or 'phong').
+    Returns:
+        np.ndarray: Rendered image in shape (res_h, res_w, 3).
+    Raises:
+        ValueError: If shader is not 'gouraud' or 'phong'.    
+    """
     if DBG:
         print("\n========== render_object() ==========")
 
+    # Here v_pos is in shape (3, N) and t_pos_idx is in shape (3, M)
     Wnorm = calc_normals(v_pos, t_pos_idx)
     R, t_vec = lookat(eye, up, target)
     v_nrm = R @ Wnorm
@@ -176,9 +260,11 @@ def render_object(v_pos, v_uvs, t_pos_idx, tex, plane_h, plane_w, res_h, res_w,
         print("       pix range x:[%d..%d], y:[%d..%d]" %
               (pix[0].min(), pix[0].max(), pix[1].min(), pix[1].max()))
 
+    # Ensure pix is in the range [0, res_w-1] and [0, res_h-1]
     img = np.ones((res_h, res_w, 3), dtype=np.float32)
     tri_depth = np.zeros(t_pos_idx.shape[1], dtype=np.float32)
     for k in range(t_pos_idx.shape[1]):
+        # Ensure indices are integers and within bounds
         idx = t_pos_idx[:, k].astype(int)
         tri_depth[k] = np.mean(depth[idx])
     order = np.argsort(tri_depth)[::-1]
