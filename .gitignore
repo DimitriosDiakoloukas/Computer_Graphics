@@ -7,4 +7,4 @@ Project*/__pycache__/
 *.fdb_latexmk
 *.fls
 _minted-*
-
+Project*/*.tex
